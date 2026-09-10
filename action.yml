@@ -41,12 +41,20 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Resolve builder lockfile
+      id: paths
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        # Local uses: ./ can leave /./ in action_path; setup-node's cache glob rejects it.
+        echo "lockfile=$(pwd -P)/package-lock.json" >> "$GITHUB_OUTPUT"
+
     - name: Setup Node
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: ${{ inputs.node-version }}
         cache: npm
-        cache-dependency-path: ${{ github.action_path }}/package-lock.json
+        cache-dependency-path: ${{ steps.paths.outputs.lockfile }}
 
     - name: Install builder dependencies
       shell: bash

@@ -39,6 +39,7 @@ jobs:
         uses: ./
         with:
           source-directory: fixture
+          artifact-name: action-fixture
           site-config: branding.json
       - name: Verify published assets
         shell: bash
@@ -47,3 +48,19 @@ jobs:
         run: |
           test -f "$BUILD_DIRECTORY/index.html"
           test -f "$BUILD_DIRECTORY/img/logo.svg"
+
+  reusable-workflow:
+    name: Validate reusable workflow integration
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/documentation.yml
+    with:
+      source-directory: fixture
+      site-config: branding.json
+      site-title: Workflow fixture
+      site-url: https://docs.example.com
+      base-url: /
+      artifact-name: workflow-fixture
+      publish: false

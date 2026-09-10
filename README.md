@@ -1,93 +1,129 @@
 # action-docusaurus-build
 
-Build a consumer repository's Markdown into a Docusaurus site and upload a GitHub
-Pages artifact. The composite action runs inside the consumer's build job; the
-consumer controls triggers, runners, deployment permissions and environments.
+Publish your repository's Markdown as a Docusaurus documentation site on GitHub
+Pages. Add one workflow call: this repository handles the build, artifact upload
+and deployment. Your repository keeps its docs, branding and event triggers.
 
-## Consumer workflow
+## Get started
 
-Check out your documentation, then call the action as a step:
+1. Add `docs/index.md` as your homepage and any additional `.md` or `.mdx` files.
+2. In your repository's **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Allow your publishing branch in the `github-pages` environment.
+4. Add `.github/workflows/documentation.yml`:
 
 ```yaml
 name: Documentation
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/documentation.yml']
+  pull_request:
+    paths: ['docs/**', '.github/workflows/documentation.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: rtCamp/action-docusaurus-build@v1
-        with:
-          site-title: My Plugin
+  documentation:
+    name: Build and publish documentation
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: rtCamp/action-docusaurus-build/.github/workflows/documentation.yml@v1
 ```
 
-One `@v1`, branch or commit SHA selects both `action.yml` and its builder code.
-GitHub downloads the action at that revision; dependencies and configuration resolve
-from `github.action_path`. No second checkout or custom checkout token is needed.
-Consumer usage assumes this repository is public. Publish `v1` before using the
-example, or substitute the current development branch for testing.
+The same caller is available in [examples/documentation.yml](examples/documentation.yml).
+Change `main` if your default branch has another name. No consumer build scripts,
+deploy job, Node dependencies, custom token or second version input are needed.
 
-The action always builds and uploads; it never deploys. PR validation therefore
-needs only `contents: read`, and it does not require an existing Pages site.
+**Availability:** this repository must be public and `v1` must include the workflow
+before using the example. To try an unreleased version, replace `@v1` with its
+branch or commit SHA. The workflow's builder revision is pinned centrally.
 
-## Deploy to GitHub Pages
+**Runners:** the shared jobs currently use self-hosted runners labelled
+`self-hosted` and `high-performance`. Your consumer repository must be allowed to
+use those runners, and the deployment runner must have GitHub CLI (`gh`) installed.
+Organisation Actions policies must also allow this workflow and its actions.
 
-Copy [examples/documentation.yml](examples/documentation.yml) for the full consumer
-workflow. Its build job checks out the consumer, reads Pages URL metadata, calls
-this action, and exposes the uploaded artifact's name to a separate deployment job.
+## What happens on each run
 
-The consumer must set **Settings → Pages → Build and deployment → Source** to
-**GitHub Actions**. The example uses `pages: read` to read Pages metadata. The deploy
-job requests `contents: read`, `pages: write` and `id-token: write`, uses the
-`github-pages` environment, and only runs on the default publishing branch. Update
-its branch condition and event filters together if publishing from another branch.
+| Event or setting | Result |
+| --- | --- |
+| Push to the publishing branch | Build, upload and deploy |
+| Manual run on the publishing branch | Build, upload and deploy |
+| Pull request or another branch | Build and upload only |
+| `publish: false` | Build and upload only; no Pages setup required |
+| Build fails | No deployment |
+| A newer commit reaches the publishing branch | The older build skips deployment |
 
-Deployment concurrency and a branch-head check belong to the consumer's deploy
-job. The example serialises the check and deployment, skips superseded commits,
-and stops on API failures. It uses the GitHub CLI preinstalled on Ubuntu runners;
-provide it yourself on a self-hosted runner. Configure the `github-pages` environment
-to allow the publishing branch.
+The publishing branch defaults to your repository's default branch. The shared
+workflow serialises deployments and checks the branch head before publishing.
 
-Artifacts belong to the consumer's workflow run. `actions/deploy-pages` publishes
-that artifact to the consumer's Pages site without committing generated files or
-creating a `gh-pages` branch. Artifact retention follows the upload action's default.
+Artifacts and logs appear in **your repository → Actions → workflow run**. The
+live site belongs to your repository too, typically `https://OWNER.github.io/REPO/`
+or its configured custom domain. Generated files are not committed to either repo;
+no `gh-pages` branch is created. Artifact retention follows the upload action's default.
 
-For custom domains, the example passes `configure-pages` outputs into `site-url`
-and `base-url`; `/` is supplied for a domain hosted at its root. PR builds skip
-Pages metadata and use repository URL defaults. Set explicit URL inputs to validate
-a custom domain or path on PRs too.
+## Available options
 
-## Inputs and outputs
+Add any of these beneath the consumer job's `with:` block. All are optional.
+Paths are relative to the consumer checkout or project as specified below.
 
-Every input is optional. Paths are relative to the consumer checkout at
-`GITHUB_WORKSPACE`; check it out before calling the action.
-
-| Input | Default | Purpose |
+| Input | Default | Use it to… |
 | --- | --- | --- |
-| `source-directory` | `.` | Project directory inside the consumer checkout |
-| `docs-directory` | `docs` | Markdown directory inside the project |
-| `site-title` | Repository name | Site and navbar title |
-| `site-config` | None | Branding JSON file relative to the project |
-| `site-url` | `https://OWNER.github.io` | Site origin, without a path |
-| `base-url` | `/REPOSITORY/` | Site path; `/` for an `OWNER.github.io` repository |
-| `sidebar` | Autogenerated | JSON array of Docusaurus sidebar items |
-| `node-version` | `22` | Builder Node.js version, 22 or later |
-| `artifact-name` | `github-pages` | Unique artifact name for each invocation in a run |
+| `source-directory` | `.` | Select a project inside a monorepo |
+| `docs-directory` | `docs` | Select the Markdown folder relative to `source-directory` |
+| `site-title` | Repository name | Set the site and navbar title |
+| `site-config` | None | Load branding JSON relative to `source-directory` |
+| `source-branch` | Repository default branch | Choose the only branch allowed to publish |
+| `publish` | `true` | Set `false` for build/artifact validation only |
+| `site-url` | Pages origin, otherwise `https://OWNER.github.io` | Override the origin, without a path |
+| `base-url` | Pages path, otherwise `/REPO/` | Override the path, with leading/trailing `/`; use `/` for a root domain |
+| `sidebar` | Autogenerated | Supply a JSON array of Docusaurus sidebar items |
+| `node-version` | `22` | Select the builder's Node version, 22 or later |
+| `artifact-name` | `github-pages` | Give each invocation in one run a unique artifact name |
 
-The action exposes `artifact-name` for a downstream deployment job and
-`build-directory`, an absolute path to the built site on the current runner.
-Each invocation uses its own output directory under `RUNNER_TEMP`. For multiple
-sites in one run, use distinct artifact names. Runner paths do not transfer between
-jobs; use the uploaded artifact for deployment.
+Owner-site repositories (`OWNER.github.io`) default to `/`. URL inputs override
+Pages metadata. PRs and `publish: false` runs skip Pages metadata; pass explicit URL
+inputs when validating a custom domain or path.
 
-## Repository branding
+**Brand a site:**
 
-Set `site-config: docs/branding.json`. The file accepts `tagline`, `favicon`,
-`navbar`, `footer`, `customCss`, and `staticDirectory`:
+```yaml
+    with:
+      site-title: My Plugin
+      site-config: docs/branding.json
+```
+
+**Build a monorepo project:**
+
+```yaml
+    with:
+      source-directory: packages/my-plugin
+      docs-directory: manual
+      site-title: My Plugin
+      source-branch: develop
+```
+
+Update the caller's branch/path filters too: for this example, use `develop` and
+`packages/my-plugin/manual/**`. Include any branding files and assets in those filters.
+
+**Validate without publishing:**
+
+```yaml
+    with:
+      publish: false
+```
+
+Keep the caller permissions block shown above. Publishing is disabled inside the
+shared workflow; you do not need to configure a Pages site for this mode.
+
+The reusable workflow exposes `artifact-name` and `page-url` outputs to downstream
+jobs. `page-url` is empty when deployment is skipped.
+
+## Branding and labels
+
+With `site-config: docs/branding.json`, create:
 
 ```json
 {
@@ -106,55 +142,40 @@ Set `site-config: docs/branding.json`. The file accepts `tagline`, `favicon`,
 }
 ```
 
-Navbar and footer use Docusaurus fields, merged one level over shared defaults;
-arrays replace the defaults. `navbar.title` overrides only the navbar title.
-Consumer CSS loads last and can override the `--docs-color-primary*` variables,
-which map to Docusaurus's theme variables for light and dark mode.
+Place the logo at `docs/assets/img/logo.svg`. Only put public assets in
+`staticDirectory`: its contents are copied into the site root. CSS and asset paths
+are relative to `source-directory` and cannot escape that project through symlinks.
 
-CSS and asset directory paths are relative to `source-directory` and cannot escape
-through traversal or symlinks. Only put public assets in `staticDirectory`: its
-contents are copied into the site root. The example logo lives at
-`docs/assets/img/logo.svg`. Include config, styles and assets in caller path filters.
+Navbar and footer accept Docusaurus fields, merged one level over shared defaults;
+arrays such as `navbar.items` replace the defaults. `navbar.title` can override only
+the navbar title. The supported top-level keys are `tagline`, `favicon`, `navbar`,
+`footer`, `customCss`, and `staticDirectory`.
 
-## Content conventions
+Consumer CSS loads after the shared stylesheet. For example, in `docs/brand.css`:
 
-- Keep `index.md` in the docs root as the homepage.
-- Use Markdown in `.md`; opt into MDX with `.mdx`.
-- Use `sidebar_position` and `sidebar_label` front matter to organise pages.
-- Links between docs stay relative. Links to repository files outside docs become
-  GitHub source links; local images remain bundled assets, including reference images.
-- Source links use the triggering branch; PRs use the head repository and branch,
-  including forks. Site identity and Pages URL remain the consumer's.
-- Broken internal links/anchors and missing repository-file links fail the build.
-
-## Local development
-
-Requires Node 22+. From this repository:
-
-```sh
-npm ci
-npm test
-npm run start -- --source /absolute/path/to/consumer --host 127.0.0.1 --no-open
-npm run build -- --source /absolute/path/to/consumer
-npm run serve -- --source /absolute/path/to/consumer --host 127.0.0.1 --no-open
+```css
+:root { --docs-color-primary: #6750a4; }
+[data-theme='dark'] { --docs-color-primary: #c9b8ff; }
 ```
 
-Identity is inferred from the consumer's GitHub origin; override with
-`--repository owner/name`. Optional `--settings /path/to/site.json` accepts
-`sourceDirectory`, `docsDirectory`, `sourceRef`, `sourceRepository`, `title`, `url`,
-`baseUrl`, `sidebar`, and `siteConfig`. The settings file can live outside the
-checkout; `siteConfig` points to the project-relative branding file.
+The `--docs-color-primary-dark`, `-darker`, `-darkest`, `-light`, `-lighter` and
+`-lightest` variants are also available. See [fixture/branding.json](fixture/branding.json)
+for a working example.
 
-`start` watches original docs in place. `serve` requires rebuilding after changes.
-Use one active development server per builder checkout.
+## Writing documentation
 
-Repository CI runs dependency-free Node tests and invokes `uses: ./` to build the
-branded fixture with the current action code. It only needs `contents: read` and
-never deploys. The fixture job retains the self-hosted `high-performance` labels;
-consumers choose their own runners.
+- Keep `index.md` in the docs root as the homepage.
+- Use Markdown in `.md`; use `.mdx` when you need MDX features.
+- Use `sidebar_position` and `sidebar_label` front matter to organise pages.
+- Keep links between docs relative. Links to repository files outside docs become
+  GitHub source links; local images, including reference-style images, are bundled.
+- Source links on PR builds use the head repository and branch, including forks.
+- Broken internal links/anchors and missing repository-file links fail the build.
 
-## Dependency maintenance
+## Build-only integration
 
-The lockfile pins Docusaurus 3.10.2. The current pinned tree has upstream/transitive
-npm audit advisories; track upstream fixes when updating the builder. These
-dependencies are isolated from consumer PHP/npm packages.
+If you already manage deployment, call the composite action directly after checking
+out your repository: `uses: rtCamp/action-docusaurus-build@v1`. It builds and uploads
+without deploying and accepts the same build inputs, excluding `publish` and
+`source-branch`. It exposes `artifact-name` and a runner-local `build-directory`.
+Most consumers should use the reusable workflow above.

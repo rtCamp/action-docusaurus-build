@@ -39,17 +39,21 @@ on:
         description: Node.js version for the standalone builder (22 or later).
         type: string
         default: '22'
+      upload-artifact:
+        description: Set false to build only; disables artifact upload, Pages lookup and deployment.
+        type: boolean
+        default: true
       artifact-name:
         description: Pages artifact name; use a unique value for each invocation in the same run.
         type: string
         default: github-pages
       publish:
-        description: Deploy successful publishing-branch builds; PRs only build and upload.
+        description: Deploy successful publishing-branch builds when upload-artifact is enabled; PRs never deploy.
         type: boolean
         default: true
     outputs:
       artifact-name:
-        description: Name of the uploaded Pages artifact in the consumer run.
+        description: Name of the uploaded Pages artifact; empty when upload is disabled.
         value: ${{ jobs.build.outputs.artifact-name }}
       page-url:
         description: Deployed Pages URL; empty when deployment is skipped.
@@ -61,7 +65,7 @@ permissions:
 jobs:
   build:
     name: Build documentation
-    runs-on: [self-hosted, high-performance]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
@@ -76,13 +80,13 @@ jobs:
 
       - name: Read Pages URL
         id: pages
-        if: inputs.publish && github.event_name != 'pull_request'
+        if: inputs.upload-artifact && inputs.publish && github.event_name != 'pull_request'
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Build and upload documentation
         id: docs
         # Maintainers update this immutable builder pin; consumers select only the workflow ref.
-        uses: rtCamp/action-docusaurus-build@0c08e5181cdbfe148fd8f572898fabadaf9970a0
+        uses: rtCamp/action-docusaurus-build@fddb65e381dd27464c6bd7cb2d80ef6efc98b71b
         with:
           source-directory: ${{ inputs.source-directory }}
           docs-directory: ${{ inputs.docs-directory }}
@@ -93,16 +97,17 @@ jobs:
           sidebar: ${{ inputs.sidebar }}
           node-version: ${{ inputs.node-version }}
           artifact-name: ${{ inputs.artifact-name }}
+          upload-artifact: ${{ inputs.upload-artifact }}
 
   deploy:
     name: Deploy documentation
     needs: build
     if: >-
-      inputs.publish &&
+      inputs.publish && inputs.upload-artifact &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       github.ref_type == 'branch' &&
       github.ref_name == (inputs.source-branch || github.event.repository.default_branch)
-    runs-on: [self-hosted, high-performance]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -124,7 +129,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_BRANCH: ${{ github.ref_name }}
         run: |
-          # The self-hosted runner must provide gh; API failure stops deployment.
+          # Ubuntu provides gh; API failure stops deployment.
           latest=$(gh api --method GET "repos/$GITHUB_REPOSITORY/commits" -f sha="$SOURCE_BRANCH" -f per_page=1 --jq '.[0].sha')
           if [ "$latest" = "$GITHUB_SHA" ]; then
             echo 'publish=true' >> "$GITHUB_OUTPUT"

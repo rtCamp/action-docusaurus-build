@@ -13,7 +13,7 @@ jobs:
   # These tests use Node built-ins only; installing the Docusaurus dependency tree is unnecessary.
   unit-tests:
     name: Test documentation tooling
-    runs-on: ["self-hosted"]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout builder
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,7 +28,7 @@ jobs:
 
   documentation:
     name: Build branded documentation fixture
-    runs-on: ["self-hosted", "high-performance"]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout action
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,14 +40,18 @@ jobs:
         with:
           source-directory: fixture
           artifact-name: action-fixture
+          upload-artifact: ${{ github.event_name != 'pull_request' }}
           site-config: branding.json
       - name: Verify published assets
         shell: bash
         env:
           BUILD_DIRECTORY: ${{ steps.docs.outputs.build-directory }}
+          ARTIFACT_NAME: ${{ steps.docs.outputs.artifact-name }}
+          EXPECTED_ARTIFACT: ${{ github.event_name != 'pull_request' && 'action-fixture' || '' }}
         run: |
           test -f "$BUILD_DIRECTORY/index.html"
           test -f "$BUILD_DIRECTORY/img/logo.svg"
+          test "$ARTIFACT_NAME" = "$EXPECTED_ARTIFACT"
 
   reusable-workflow:
     name: Validate reusable workflow integration
@@ -63,4 +67,5 @@ jobs:
       site-url: https://docs.example.com
       base-url: /
       artifact-name: workflow-fixture
+      upload-artifact: ${{ github.event_name != 'pull_request' }}
       publish: false

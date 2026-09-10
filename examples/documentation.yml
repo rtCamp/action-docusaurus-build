@@ -16,3 +16,5 @@ jobs:
       pages: write
       id-token: write
     uses: rtCamp/action-docusaurus-build/.github/workflows/documentation.yml@v1
+    with:
+      upload-artifact: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}

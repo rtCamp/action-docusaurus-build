@@ -86,7 +86,7 @@ jobs:
       - name: Build and upload documentation
         id: docs
         # Maintainers update this immutable builder pin; consumers select only the workflow ref.
-        uses: rtCamp/action-docusaurus-build@fddb65e381dd27464c6bd7cb2d80ef6efc98b71b
+        uses: rtCamp/action-docusaurus-build@8cfb89363738d49ad919151260765ba4332a7474
         with:
           source-directory: ${{ inputs.source-directory }}
           docs-directory: ${{ inputs.docs-directory }}

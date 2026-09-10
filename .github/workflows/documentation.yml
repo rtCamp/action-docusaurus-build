@@ -51,10 +51,6 @@ on:
         description: Deploy successful source-branch builds to GitHub Pages; PRs only upload artifacts.
         type: boolean
         default: true
-    secrets:
-      tooling-token:
-        description: Read-only token for this private builder repository; required for cross-repository checkout while private.
-        required: false
 
 permissions:
   contents: read
@@ -81,7 +77,6 @@ jobs:
           # The reusable workflow runs in the consumer's context, so select the builder explicitly.
           repository: rtCamp/action-docusaurus-build
           ref: ${{ inputs.tooling-ref }}
-          token: ${{ secrets.tooling-token || github.token }}
           path: builder
           persist-credentials: false
 

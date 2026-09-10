@@ -32,8 +32,6 @@ jobs:
     uses: rtCamp/action-docusaurus-build/.github/workflows/documentation.yml@v1
     with:
       tooling-ref: v1
-    secrets:
-      tooling-token: ${{ secrets.DOCS_TOOLING_TOKEN }}
 ```
 
 Publish the workflow and builder in `v1` before enabling the example. To test a development branch, use that branch in
@@ -57,15 +55,7 @@ See [GitHub publishing sources](https://docs.github.com/en/pages/getting-started
 and [reusable workflow access](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).
 Organization Actions policies must allow the caller to access this shared workflow.
 
-This repository is currently private. Enable access for the intended consumer
-repositories under its **Settings → Actions → General → Access**. The consumer's
-`GITHUB_TOKEN` cannot check out another private repository: provide `tooling-token`
-through a consumer secret such as `DOCS_TOOLING_TOKEN`, using a token with read-only
-contents access to `rtCamp/action-docusaurus-build`. Workflow sharing and checkout
-authentication are separate requirements. Same-repository fixture runs use
-`GITHUB_TOKEN`; if this repository becomes public, consumers can omit the secret.
-Fork PRs do not receive consumer secrets by default, so their builds cannot check out
-this private builder unless the organisation provides an approved alternative.
+Consumer usage assumes this repository is public. No custom checkout token is required.
 
 ## Defaults and overrides
 

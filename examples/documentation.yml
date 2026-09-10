@@ -18,5 +18,3 @@ jobs:
     uses: rtCamp/action-docusaurus-build/.github/workflows/documentation.yml@v1
     with:
       tooling-ref: v1
-    secrets:
-      tooling-token: ${{ secrets.DOCS_TOOLING_TOKEN }}

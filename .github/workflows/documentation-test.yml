@@ -1,0 +1,71 @@
+name: Test documentation builder
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # These tests use Node built-ins only; installing the Docusaurus dependency tree is unnecessary.
+  unit-tests:
+    name: Test documentation tooling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Test builder
+        run: npm test
+
+  documentation:
+    name: Build branded documentation fixture
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout action
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build fixture with the local action
+        id: docs
+        uses: ./
+        with:
+          source-directory: fixture
+          artifact-name: action-fixture
+          upload-artifact: ${{ github.event_name != 'pull_request' }}
+          site-config: branding.json
+      - name: Verify published assets
+        shell: bash
+        env:
+          BUILD_DIRECTORY: ${{ steps.docs.outputs.build-directory }}
+          ARTIFACT_NAME: ${{ steps.docs.outputs.artifact-name }}
+          EXPECTED_ARTIFACT: ${{ github.event_name != 'pull_request' && 'action-fixture' || '' }}
+        run: |
+          test -f "$BUILD_DIRECTORY/index.html"
+          test -f "$BUILD_DIRECTORY/img/logo.svg"
+          test "$ARTIFACT_NAME" = "$EXPECTED_ARTIFACT"
+
+  reusable-workflow:
+    name: Validate reusable workflow integration
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/documentation.yml
+    with:
+      source-directory: fixture
+      site-config: branding.json
+      site-title: Workflow fixture
+      site-url: https://docs.example.com
+      base-url: /
+      artifact-name: workflow-fixture
+      upload-artifact: ${{ github.event_name != 'pull_request' }}
+      publish: false

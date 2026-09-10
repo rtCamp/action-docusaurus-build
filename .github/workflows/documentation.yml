@@ -1,0 +1,145 @@
+name: Build and deploy documentation
+
+on:
+  workflow_call:
+    inputs:
+      source-directory:
+        description: Project directory relative to the consumer checkout.
+        type: string
+        default: '.'
+      docs-directory:
+        description: Markdown directory relative to source-directory; index.md is the homepage.
+        type: string
+        default: docs
+      source-branch:
+        description: Branch allowed to publish; empty uses the consumer default branch.
+        type: string
+        default: ''
+      site-title:
+        description: Site title; empty uses the consumer repository name.
+        type: string
+        default: ''
+      site-config:
+        description: Optional branding JSON file relative to source-directory.
+        type: string
+        default: ''
+      site-url:
+        description: Site origin; empty uses Pages metadata or https://OWNER.github.io for validation.
+        type: string
+        default: ''
+      base-url:
+        description: Site path; empty uses Pages metadata or the consumer repository path for validation.
+        type: string
+        default: ''
+      sidebar:
+        description: Optional JSON array of Docusaurus sidebar items; empty generates it from docs.
+        type: string
+        default: ''
+      node-version:
+        description: Node.js version for the standalone builder (22 or later).
+        type: string
+        default: '22'
+      upload-artifact:
+        description: Set false to build only; disables artifact upload, Pages lookup and deployment.
+        type: boolean
+        default: true
+      artifact-name:
+        description: Pages artifact name; use a unique value for each invocation in the same run.
+        type: string
+        default: github-pages
+      publish:
+        description: Deploy successful publishing-branch builds when upload-artifact is enabled; PRs never deploy.
+        type: boolean
+        default: true
+    outputs:
+      artifact-name:
+        description: Name of the uploaded Pages artifact; empty when upload is disabled.
+        value: ${{ jobs.build.outputs.artifact-name }}
+      page-url:
+        description: Deployed Pages URL; empty when deployment is skipped.
+        value: ${{ jobs.deploy.outputs.page-url }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      artifact-name: ${{ steps.docs.outputs.artifact-name }}
+    steps:
+      - name: Checkout consumer documentation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read Pages URL
+        id: pages
+        if: inputs.upload-artifact && inputs.publish && github.event_name != 'pull_request'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Build and upload documentation
+        id: docs
+        # Maintainers update this immutable builder pin; consumers select only the workflow ref.
+        uses: rtCamp/action-docusaurus-build@3b0ca5df00c7bb1d4a1098d1198d1257b1e8dda6
+        with:
+          source-directory: ${{ inputs.source-directory }}
+          docs-directory: ${{ inputs.docs-directory }}
+          site-title: ${{ inputs.site-title }}
+          site-config: ${{ inputs.site-config }}
+          site-url: ${{ inputs.site-url || steps.pages.outputs.origin }}
+          base-url: ${{ inputs.base-url || (steps.pages.outputs.base_url && format('{0}/', steps.pages.outputs.base_path) || '') }}
+          sidebar: ${{ inputs.sidebar }}
+          node-version: ${{ inputs.node-version }}
+          artifact-name: ${{ inputs.artifact-name }}
+          upload-artifact: ${{ inputs.upload-artifact }}
+
+  deploy:
+    name: Deploy documentation
+    needs: build
+    if: >-
+      inputs.publish && inputs.upload-artifact &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_type == 'branch' &&
+      github.ref_name == (inputs.source-branch || github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    outputs:
+      page-url: ${{ steps.deployment.outputs.page_url }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      # Serialise the freshness check and deployment so old builds cannot overwrite new ones.
+      group: documentation-pages-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Skip superseded builds
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          # Ubuntu provides gh; API failure stops deployment.
+          latest=$(gh api --method GET "repos/$GITHUB_REPOSITORY/commits" -f sha="$SOURCE_BRANCH" -f per_page=1 --jq '.[0].sha')
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Skipping deployment: the source branch has advanced.'
+          fi
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: steps.current.outputs.publish == 'true'
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact-name }}

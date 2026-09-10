@@ -1,0 +1,105 @@
+name: Build Docusaurus documentation
+description: Build consumer Markdown with shared branding defaults and upload a GitHub Pages artifact.
+inputs:
+  source-directory:
+    description: Project directory relative to the consumer checkout.
+    default: '.'
+  docs-directory:
+    description: Markdown directory relative to source-directory; index.md is the homepage.
+    default: docs
+  site-title:
+    description: Site title; empty uses the consumer repository name.
+    default: ''
+  site-config:
+    description: Optional branding JSON file relative to source-directory.
+    default: ''
+  site-url:
+    description: Site origin; empty uses https://OWNER.github.io.
+    default: ''
+  base-url:
+    description: Site path; empty uses the consumer repository path.
+    default: ''
+  sidebar:
+    description: Optional JSON array of Docusaurus sidebar items; empty generates it from docs.
+    default: ''
+  node-version:
+    description: Node.js version for the standalone builder (22 or later).
+    default: '22'
+  artifact-name:
+    description: Pages artifact name; use a unique value for each invocation in the same run.
+    default: github-pages
+outputs:
+  build-directory:
+    description: Absolute path to the built site on the current runner.
+    value: ${{ steps.build.outputs.build-directory }}
+  artifact-name:
+    description: Name of the uploaded GitHub Pages artifact.
+    value: ${{ inputs.artifact-name }}
+runs:
+  using: composite
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ github.action_path }}/package-lock.json
+
+    - name: Install builder dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --no-fund
+
+    - name: Build static documentation
+      id: build
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      # Inputs stay data; the action code and lockfile come from the caller's single uses ref.
+      env:
+        SOURCE_DIRECTORY: ${{ inputs.source-directory }}
+        DOCS_DIRECTORY: ${{ inputs.docs-directory }}
+        SITE_TITLE: ${{ inputs.site-title }}
+        SITE_CONFIG: ${{ inputs.site-config }}
+        SITE_URL: ${{ inputs.site-url }}
+        BASE_URL: ${{ inputs.base-url }}
+        SIDEBAR: ${{ inputs.sidebar }}
+        SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+        SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      run: |
+        node --input-type=module <<'JS'
+        import { appendFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+        import { spawnSync } from 'node:child_process';
+        import path from 'node:path';
+        const env = process.env;
+        // Keep each invocation's output distinct when a job builds more than one site.
+        const work = mkdtempSync(path.join(env.RUNNER_TEMP, 'docusaurus-'));
+        const settingsPath = path.join(work, 'settings.json');
+        const output = path.join(work, 'build');
+        const settings = {
+          sourceDirectory: env.SOURCE_DIRECTORY,
+          docsDirectory: env.DOCS_DIRECTORY,
+          sourceRef: env.SOURCE_REF,
+          sourceRepository: env.SOURCE_REPOSITORY,
+          title: env.SITE_TITLE,
+          siteConfig: env.SITE_CONFIG,
+          url: env.SITE_URL,
+          baseUrl: env.BASE_URL,
+          ...(env.SIDEBAR ? { sidebar: JSON.parse(env.SIDEBAR) } : {}),
+        };
+        writeFileSync(settingsPath, JSON.stringify(settings));
+        try {
+          const child = spawnSync(process.execPath, ['cli.mjs', 'build', '--source', env.GITHUB_WORKSPACE, '--settings', settingsPath, '--out-dir', output], { stdio: 'inherit' });
+          if (child.error) throw child.error;
+          process.exitCode = child.status ?? 1;
+          if (process.exitCode === 0) appendFileSync(env.GITHUB_OUTPUT, `build-directory=${output}\n`);
+        } finally {
+          rmSync(settingsPath, { force: true });
+        }
+        JS
+
+    - name: Upload GitHub Pages artifact
+      uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.build.outputs.build-directory }}
+        include-hidden-files: true # Preserve .nojekyll.

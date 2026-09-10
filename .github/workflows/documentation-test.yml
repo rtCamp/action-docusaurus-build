@@ -28,13 +28,22 @@ jobs:
 
   documentation:
     name: Build branded documentation fixture
-    permissions:
-      contents: read
-      pages: write # Required by the reusable workflow; deployment is disabled below.
-      id-token: write
-    uses: ./.github/workflows/documentation.yml
-    with:
-      source-directory: fixture
-      site-config: branding.json
-      tooling-ref: ${{ github.sha }}
-      publish: false
+    runs-on: ["self-hosted", "high-performance"]
+    steps:
+      - name: Checkout action
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build fixture with the local action
+        id: docs
+        uses: ./
+        with:
+          source-directory: fixture
+          site-config: branding.json
+      - name: Verify published assets
+        shell: bash
+        env:
+          BUILD_DIRECTORY: ${{ steps.docs.outputs.build-directory }}
+        run: |
+          test -f "$BUILD_DIRECTORY/index.html"
+          test -f "$BUILD_DIRECTORY/img/logo.svg"

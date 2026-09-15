@@ -36,9 +36,9 @@ on:
         type: string
         default: ''
       node-version:
-        description: Node.js version for the standalone builder (22 or later).
+        description: Node.js version for the builder; defaults to the latest LTS (minimum 22).
         type: string
-        default: '22'
+        default: 'lts/*'
       upload-artifact:
         description: Set false to build only; disables artifact upload, Pages lookup and deployment.
         type: boolean
@@ -86,7 +86,7 @@ jobs:
       - name: Build and upload documentation
         id: docs
         # Maintainers update this immutable builder pin; consumers select only the workflow ref.
-        uses: rtCamp/action-docusaurus-build@3b0ca5df00c7bb1d4a1098d1198d1257b1e8dda6
+        uses: rtCamp/action-docusaurus-build@5705f3829b624220ce4f8903be1644c9b3dcc593
         with:
           source-directory: ${{ inputs.source-directory }}
           docs-directory: ${{ inputs.docs-directory }}
@@ -129,7 +129,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_BRANCH: ${{ github.ref_name }}
         run: |
-          # Ubuntu provides gh; API failure stops deployment.
           latest=$(gh api --method GET "repos/$GITHUB_REPOSITORY/commits" -f sha="$SOURCE_BRANCH" -f per_page=1 --jq '.[0].sha')
           if [ "$latest" = "$GITHUB_SHA" ]; then
             echo 'publish=true' >> "$GITHUB_OUTPUT"

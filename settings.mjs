@@ -45,7 +45,6 @@ export function loadBranding(project, configPath) {
   for (const key of Object.keys(branding)) {
     if (!allowed.includes(key)) throw new Error(`Unknown branding field: ${key}`);
   }
-  // Resolve filesystem inputs here; favicon and navbar image values remain public site URLs.
   for (const key of ['customCss', 'staticDirectory']) {
     if (branding[key] !== undefined) branding[key] = inside(project, branding[key]);
   }
@@ -57,7 +56,6 @@ export function loadSettings() {
   if (!process.env.DOCS_SETTINGS || !process.env.DOCS_SOURCE) throw new Error('Use cli.mjs with --source');
   const settings = JSON.parse(readFileSync(process.env.DOCS_SETTINGS, 'utf8'));
   const source = realpathSync(process.env.DOCS_SOURCE);
-  // Keep checkout and project roots distinct for monorepos and repository-relative edit links.
   const project = inside(source, settings.sourceDirectory);
   const docs = inside(project, settings.docsDirectory);
   return { ...settings, sourceRepository: settings.sourceRepository || settings.repository, source, docs, branding: loadBranding(project, settings.siteConfig) };

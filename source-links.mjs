@@ -24,7 +24,6 @@ export default function sourceLinks({ source, docs, repository, sourceRef }) {
         delete node.label;
         delete node.referenceType;
       }
-      // Leave absolute URLs, site-root paths and same-page anchors to their existing handlers.
       if (node.type === 'link' && node.url && !/^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(node.url)) {
         // Check the decoded filesystem path while retaining URL queries and fragments verbatim.
         const suffixAt = node.url.search(/[?#]/);
@@ -33,7 +32,6 @@ export default function sourceLinks({ source, docs, repository, sourceRef }) {
         const target = path.resolve(path.dirname(file.path), decodeURIComponent(pathname));
         const fromDocs = path.relative(docs, target);
         const fromSource = path.relative(source, target);
-        // Docs-to-docs links need Docusaurus routes; only repository source links go to GitHub.
         if (fromDocs === '..' || fromDocs.startsWith(`..${path.sep}`)) {
           if (fromSource === '..' || fromSource.startsWith(`..${path.sep}`) || !existsSync(target)) {
             throw new Error(`Unresolved repository link in ${file.path}: ${node.url}`);

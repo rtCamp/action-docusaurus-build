@@ -3,13 +3,11 @@ import sourceLinks from './source-links.mjs';
 import { loadSettings } from './settings.mjs';
 
 const { source, docs, repository, sourceRepository, sourceRef, title, url, baseUrl, tagline, branding } = loadSettings();
-// GitHub edit paths start at the checkout root, including any monorepo project prefix.
 const docsRelative = path.relative(source, docs).split(path.sep).map(encodeURIComponent).join('/');
 export default {
   title,
   tagline: branding.tagline ?? tagline ?? 'Developer documentation',
   favicon: branding.favicon,
-  // Copy consumer assets alongside shared static files, retaining the shared .nojekyll marker.
   staticDirectories: ['./static', ...(branding.staticDirectory ? [branding.staticDirectory] : [])],
   url,
   baseUrl,
@@ -23,7 +21,7 @@ export default {
       path: docs,
       routeBasePath: '/',
       sidebarPath: './sidebars.js',
-      // editUrl: ({ docPath }) => `https://github.com/${sourceRepository}/edit/${sourceRef}/${docsRelative}/${docPath.split('/').map(encodeURIComponent).join('/')}`,
+      editUrl: ({ docPath }) => `https://github.com/${sourceRepository}/edit/${sourceRef}/${docsRelative}/${docPath.split('/').map(encodeURIComponent).join('/')}`,
       // Expand references before Docusaurus resolves Markdown links and bundles local images.
       beforeDefaultRemarkPlugins: [[sourceLinks, { source, docs, repository: sourceRepository, sourceRef }]],
     },
@@ -33,7 +31,6 @@ export default {
     theme: { customCss: ['./style.css', ...(branding.customCss ? [branding.customCss] : [])] },
   }]],
   themeConfig: {
-    // Merge presentation objects one level deep; supplied arrays replace the default arrays.
     navbar: { title, items: [{ type: 'docSidebar', sidebarId: 'docs', label: 'Documentation', position: 'left' }, { href: `https://github.com/${repository}`, label: 'GitHub', position: 'right' }], ...branding.navbar },
     colorMode: { respectPrefersColorScheme: true },
     prism: { additionalLanguages: ['php', 'bash', 'json'] },

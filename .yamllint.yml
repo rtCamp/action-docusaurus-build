@@ -1,0 +1,25 @@
+# yamllint — https://yamllint.readthedocs.io/
+# Lints GitHub Actions workflow YAML. Install locally via `pip install yamllint`.
+
+extends: default
+
+rules:
+  # GitHub Actions sometimes needs long one-line expressions — be lenient.
+  line-length:
+    max: 200
+    level: warning
+
+  # Allow quoted 'on:' to avoid YAML 1.1 truthy pitfalls.
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
+    check-keys: false
+
+  # Comments can start at any column.
+  comments:
+    min-spaces-from-content: 1
+
+  # Let document start (---) be optional.
+  document-start: disable
+
+ignore: |
+  node_modules/

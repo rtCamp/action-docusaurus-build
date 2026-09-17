@@ -1,15 +1,13 @@
 # action-docusaurus-build
 
-Publish your repository's Markdown as a Docusaurus documentation site on GitHub
-Pages. Add one workflow call: this repository handles the build, artifact upload
-and deployment. Your repository keeps its docs, branding and event triggers.
+Build a repository's Markdown as a Docusaurus documentation site. The composite
+action owns the build and shared branding defaults; the consumer workflow decides
+whether and how to upload or deploy the generated site.
 
 ## Get started
 
 1. Add `docs/index.md` as your homepage and any additional `.md` or `.mdx` files.
-2. In your repository's **Settings → Pages**, set **Source** to **GitHub Actions**.
-3. Allow your publishing branch in the `github-pages` environment.
-4. Add `.github/workflows/documentation.yml`:
+2. Add `.github/workflows/documentation.yml`:
 
 ```yaml
 name: Documentation
@@ -23,52 +21,41 @@ on:
 permissions:
   contents: read
 jobs:
-  documentation:
-    name: Build and publish documentation
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    uses: rtCamp/action-docusaurus-build/.github/workflows/documentation.yml@v1
-    with:
-      upload-artifact: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: docs
+        uses: rtCamp/action-docusaurus-build@v1
 ```
 
-The same caller is available in [examples/documentation.yml](examples/documentation.yml).
-Change `main` if your default branch has another name. No consumer build scripts,
-deploy job, Node dependencies, custom token or second version input are needed.
+The action automatically loads the root `action.yml` at the selected tag. The built
+site is available to later steps at `${{ steps.docs.outputs.build-directory }}`.
+Change `main` if your default branch has another name.
 
-**Availability:** this repository must be public and `v1` must include the workflow
-before using the example. To try an unreleased version, replace `@v1` with its
-branch or commit SHA. The workflow's builder revision is pinned centrally.
+To publish on GitHub Pages, set **Settings → Pages → Source** to **GitHub
+Actions**, allow the publishing branch in the `github-pages` environment, and use
+the complete consumer-owned workflow in
+[examples/documentation.yml](examples/documentation.yml). It configures Pages,
+uploads the build output, and deploys it only from the default branch.
 
-**Runners:** all workflows use GitHub-hosted `ubuntu-latest` runners. No self-hosted
-runner setup is needed. Organisation Actions policies must allow this workflow and
-its actions.
+**Availability:** `v1` must point to a commit containing the root `action.yml`. To
+try an unreleased version, replace `@v1` with its branch or commit SHA. Organisation
+Actions policies must allow this action and the actions selected by the consumer.
 
 ## What happens on each run
 
-| Event or setting | Result |
+| Consumer workflow path | Result |
 | --- | --- |
-| Push to the publishing branch | Build, upload and deploy |
-| Manual run on the publishing branch | Build, upload and deploy |
-| Pull request or another branch, with the example above | Build only; no upload or deployment |
-| `upload-artifact: false` | Build only; no upload, Pages lookup or deployment |
-| `upload-artifact: true`, `publish: false` | Build and upload only; no Pages setup required |
-| Build fails | No deployment |
-| A newer commit reaches the publishing branch | The older build skips deployment |
-
-The example enables upload only for non-PR runs on the default branch. If you omit
-that expression, `upload-artifact` defaults to `true`, including on PRs; PRs still
-never deploy.
-
-The publishing branch defaults to your repository's default branch. The shared
-workflow serialises deployments and checks the branch head before publishing.
+| Call only `rtCamp/action-docusaurus-build@v1` | Build and expose `build-directory` |
+| Add `actions/upload-pages-artifact` | Build and upload the selected output |
+| Add a Pages deployment job | Build, upload and deploy according to consumer conditions |
+| Build fails | Later upload and deployment steps do not run |
 
 Artifacts and logs appear in **your repository → Actions → workflow run**. The
 live site belongs to your repository too, typically `https://OWNER.github.io/REPO/`
-or its configured custom domain. Generated files are not committed to either repo;
-no `gh-pages` branch is created. Artifact retention follows the upload action's default.
+or its configured custom domain. Upload, deployment, concurrency, environments and
+artifact retention are all controlled by the consumer workflow.
 
 ## Available options
 
@@ -81,19 +68,14 @@ Paths are relative to the consumer checkout or project as specified below.
 | `docs-directory` | `docs` | Select the Markdown folder relative to `source-directory` |
 | `site-title` | Repository name | Set the site and navbar title |
 | `site-config` | None | Load branding JSON relative to `source-directory` |
-| `source-branch` | Repository default branch | Choose the only branch allowed to publish |
-| `upload-artifact` | `true` | Set `false` to build only, without upload or deployment |
-| `publish` | `true` | Set `false` to skip deployment while optionally retaining an artifact |
-| `site-url` | Pages origin, otherwise `https://OWNER.github.io` | Override the origin, without a path |
-| `base-url` | Pages path, otherwise `/REPO/` | Override the path, with leading/trailing `/`; use `/` for a root domain |
+| `site-url` | `https://OWNER.github.io` | Override the origin, without a path |
+| `base-url` | `/REPO/` | Override the path, with leading/trailing `/`; use `/` for a root domain |
 | `sidebar` | Autogenerated | Supply a JSON array of Docusaurus sidebar items |
 | `node-version` | `lts/*` | Defaults to the latest LTS; accepts an explicit version, 22 or later |
-| `artifact-name` | `github-pages` | Give each invocation in one run a unique artifact name |
 
 Owner-site repositories (`OWNER.github.io`) default to `/`. URL inputs override
-Pages metadata. PRs, `publish: false`, and `upload-artifact: false` runs skip Pages
-metadata; pass explicit URL
-inputs when validating a custom domain or path.
+the inferred values. A consumer can pass outputs from `actions/configure-pages` to
+validate a configured custom domain or Pages path, as the full example does.
 
 **Brand a site:**
 
@@ -110,34 +92,11 @@ inputs when validating a custom domain or path.
       source-directory: packages/my-plugin
       docs-directory: manual
       site-title: My Plugin
-      source-branch: develop
 ```
 
 Update the caller's branch/path filters too: for this example, use `develop` and
-`packages/my-plugin/manual/**`. Update the `upload-artifact` expression to compare
-against `develop` too. Include any branding files and assets in the path filters.
-
-**Build only, without storing artifacts or publishing:**
-
-```yaml
-    with:
-      upload-artifact: false
-```
-
-**Keep an artifact without publishing:**
-
-```yaml
-    with:
-      upload-artifact: true
-      publish: false
-```
-
-Keep the caller permissions block shown above. Neither mode requires a configured
-Pages site. Disabling upload also disables deployment, even if `publish` is `true`.
-
-The reusable workflow exposes `artifact-name` and `page-url` outputs to downstream
-jobs. `artifact-name` is empty when upload is disabled; `page-url` is empty when
-deployment is skipped.
+`packages/my-plugin/manual/**`. Include any branding files and assets in the path
+filters. The consumer also owns any publishing-branch conditions.
 
 ## Branding and labels
 
@@ -190,10 +149,8 @@ for a working example.
 - Source links on PR builds use the head repository and branch, including forks.
 - Broken internal links/anchors and missing repository-file links fail the build.
 
-## Build-only integration
+## Build output
 
-If you already manage deployment, call the composite action directly after checking
-out your repository: `uses: rtCamp/action-docusaurus-build@v1`. It builds and optionally uploads
-without deploying and accepts the same build inputs, excluding `publish` and
-`source-branch`. It exposes `artifact-name` and a runner-local `build-directory`.
-Most consumers should use the reusable workflow above.
+The action exposes one output, `build-directory`, containing the absolute path to
+the generated site on the current runner. It is intentionally runner-local. Pass
+that path to the consumer's preferred artifact, deployment or validation step.

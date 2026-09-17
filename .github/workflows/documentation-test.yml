@@ -39,33 +39,11 @@ jobs:
         uses: ./
         with:
           source-directory: fixture
-          artifact-name: action-fixture
-          upload-artifact: ${{ github.event_name != 'pull_request' }}
           site-config: branding.json
       - name: Verify published assets
         shell: bash
         env:
           BUILD_DIRECTORY: ${{ steps.docs.outputs.build-directory }}
-          ARTIFACT_NAME: ${{ steps.docs.outputs.artifact-name }}
-          EXPECTED_ARTIFACT: ${{ github.event_name != 'pull_request' && 'action-fixture' || '' }}
         run: |
           test -f "$BUILD_DIRECTORY/index.html"
           test -f "$BUILD_DIRECTORY/img/logo.svg"
-          test "$ARTIFACT_NAME" = "$EXPECTED_ARTIFACT"
-
-  reusable-workflow:
-    name: Validate reusable workflow integration
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    uses: ./.github/workflows/documentation.yml
-    with:
-      source-directory: fixture
-      site-config: branding.json
-      site-title: Workflow fixture
-      site-url: https://docs.example.com
-      base-url: /
-      artifact-name: workflow-fixture
-      upload-artifact: ${{ github.event_name != 'pull_request' }}
-      publish: false
